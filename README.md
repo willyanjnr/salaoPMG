@@ -36,6 +36,16 @@ Os scripts da pasta `exemplos/` rodam do início ao fim:
 install.packages(c("png", "jpeg", "pdftools", "tesseract"))
 ```
 
+## Análises básicas para publicação
+
+O script `exemplos/05_analises_basicas.R` faz, com um mesmo ensaio simulado de
+soja (4 cultivares x 4 densidades em blocos casualizados), as análises mais
+usadas em artigos: estatística descritiva, ANOVA fatorial com verificação dos
+pressupostos, teste de Tukey, regressão com ponto de máxima, correlação,
+regressão stepwise e componentes principais. Ele instala os pacotes que
+faltarem e salva tabelas e figuras na pasta `resultados/`. Para usar com os seus
+dados, troque a seção 1 pela leitura da sua planilha.
+
 Um script só substitui um programa pago depois de uma validação séria, com as
 mesmas amostras medidas pelo script e pelo método de referência.
 
