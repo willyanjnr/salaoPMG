@@ -26,11 +26,11 @@ Os scripts da pasta `exemplos/` rodam do início ao fim:
 
 | Script | Tarefa | Programa pago comparado |
 |---|---|---|
-| `04_raizes_comprimento.R` | comprimento de raízes por imagem, com validação | WinRHIZO |
+| `04_raizes_comprimento.R` | comprimento de raízes em foto de soja e validação com imagens simuladas | WinRHIZO |
 | `03b_fitopatologia_severidade.R` | área sadia, clorose e necrose em folha | WinDIAS |
 | `03_fitopatologia_progresso.R` | AACPD, ANOVA e modelo logístico | SAS, Statistica |
 | `02_ia_ocr_pdf.R` | texto e tabela de um PDF digitalizado | ABBYY FineReader |
-| `01_biologia_diversidade.R` | diversidade e dendrograma de Bray-Curtis | PC-ORD, PRIMER |
+| `01_biologia_diversidade.R` | diversidade e dendrograma de Bray-Curtis (extra, fora da apresentação) | PC-ORD, PRIMER |
 
 ```r
 install.packages(c("png", "jpeg", "pdftools", "tesseract"))
@@ -52,5 +52,6 @@ Para voltar a rodar os scripts de `reproduzir/`, reabra o projeto.
 ## Créditos
 
 A imagem `exemplos/dados/folha_soja.jpg` vem do pacote pliman (Olivoto, 2022,
-licença GPL). O documento `exemplos/dados/boletim_digitalizado.pdf` é simulado,
+licença GPL). A foto `exemplos/dados/raiz_soja.png` teve o fundo editado com IA e
+serve só para demonstrar o método. O documento `exemplos/dados/boletim_digitalizado.pdf` é simulado,
 com valores fictícios.

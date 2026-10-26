@@ -47,14 +47,29 @@ h1 | h2
 risco <- with(clima, risk(DY, MO, TMED, RH, disease = "rust"))
 
 ## ---- eb-risco-grafico ----
-meses <- c("jan", "fev", "mar", "abr", "mai", "jun",
-           "jul", "ago", "set", "out", "nov", "dez")
-risco$Mes <- factor(meses[risco$Month], levels = meses)
-ggplot(risco, aes(Mes, RELrisk, fill = RELrisk)) +
-  geom_col(width = 0.7) +
-  scale_fill_gradient(low = "#FBDDB0", high = cores[["laranja"]], guide = "none") +
-  labs(x = NULL, y = "Risco relativo (%)") +
-  theme(panel.grid.major.x = element_blank())
+# Gráfico previsto no código da função risk(): risco por temperatura, por
+# umidade e risco total, mês a mês. Na versão atual do CRAN esse bloco fica
+# depois do return() e não é desenhado, então ele é refeito aqui com os
+# mesmos cálculos da função.
+alfa <- log(2) / log(2.30508474576)
+umidade <- aggregate(RH ~ DY + MO, data = clima, FUN = function(x) sum(x > 85))
+names(umidade) <- c("Day", "Month", "W")
+umidade$RHrisk <- pmin(1 / 1 + 2.72^(umidade$W - 12), 100)
+temp <- aggregate(TMED ~ DY + MO, data = subset(clima, RH > 85), FUN = mean)
+names(temp) <- c("Day", "Month", "TMed")
+temp$TEMPrisk <- (2 * (temp$TMed - 8) * alfa * (22.75 - 8) * alfa -
+                  (temp$TMed - 8) * 2 * alfa) / (22.75 - 8) * 2 * alfa
+diario_risco <- merge(umidade, temp)
+diario_risco$TOTALrisk <- pmin(diario_risco$RHrisk * diario_risco$TEMPrisk, 100)
+
+layout(matrix(c(1, 3, 2, 3), 2, 2, byrow = TRUE))
+cor_caixa <- rgb(0.3, 0.5, 0.4, 0.6)
+boxplot(TEMPrisk ~ Month, data = temp, col = cor_caixa, outline = FALSE,
+        ylab = "Temperature Risk (%)", xlab = "Month")
+boxplot(RHrisk ~ Month, data = umidade, col = cor_caixa, outline = FALSE,
+        ylab = "Relative Humidity Risk (%)", xlab = "Month")
+boxplot(TOTALrisk ~ Month, data = diario_risco, col = cor_caixa, outline = FALSE,
+        ylab = "Total Risk (%)", xlab = "Month")
 
 ## ---- eb-plastocrono ----
 p <- with(pheno, plast(GEN, TMED, EST, NN, habit = "ind", plot = TRUE))
@@ -82,6 +97,24 @@ cardinais <- with(diario[1:120, ], optemp(TMED, crop = "soybean"))
 set.seed(26)
 ensaio <- data.frame(Gen = paste0("G", 1:20), Var = round(rnorm(20, 3.5, 0.8), 2))
 selecao <- with(ensaio, transg(Gen, Var, Control = rep(3.8, 20), plot = TRUE))
+
+## ---- eb-deltat-conceito ----
+# Delta T = temperatura do ar menos temperatura de bulbo úmido.
+# Bulbo úmido pela fórmula de Stull (2011), a partir da temperatura e da umidade.
+bulbo_umido <- function(t, ur) {
+  t * atan(0.151977 * sqrt(ur + 8.313659)) + atan(t + ur) - atan(ur - 1.676331) +
+    0.00391838 * ur^1.5 * atan(0.023101 * ur) - 4.686035
+}
+grade <- expand.grid(temp = seq(10, 40, by = 0.2), ur = seq(20, 100, by = 0.5))
+grade$delta_t <- grade$temp - bulbo_umido(grade$temp, grade$ur)
+grade$faixa <- cut(grade$delta_t, c(-Inf, 2, 8, Inf),
+                   labels = c("Abaixo de 2", "De 2 a 8 (adequado)", "Acima de 8"))
+ggplot(grade, aes(temp, ur)) +
+  geom_raster(aes(fill = faixa)) +
+  geom_contour(aes(z = delta_t), breaks = c(2, 8), colour = "white", linewidth = 0.8) +
+  scale_fill_manual(values = c("#8FA9C4", cores[["secundaria"]], cores[["laranja"]])) +
+  scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0)) +
+  labs(x = "Temperatura do ar (°C)", y = "Umidade relativa (%)", fill = "Delta T (°C)")
 
 ## ---- eb-tdelta ----
 prev <- tdelta(LON = -53.6969, LAT = -28.0638, type = 1, days = 5, verbose = FALSE)

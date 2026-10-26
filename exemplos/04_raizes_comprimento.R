@@ -5,14 +5,19 @@
 # matriz de pixels, as raízes são separadas do fundo, afinadas até a espessura
 # de um pixel (esqueleto) e o comprimento é a soma das ligações entre os
 # pixels do esqueleto.
-# As imagens são simuladas, com comprimento conhecido, para mostrar como se
-# valida o método. Com imagens reais, a validação é feita contra o método de
-# referência (WinRHIZO, régua ou método das interseções) nas mesmas amostras.
+# Primeiro o método é aplicado a uma foto de raiz de soja (fundo editado com
+# IA, por isso serve só como demonstração). Depois ele é validado com imagens
+# simuladas de comprimento conhecido. Com raízes reais, a validação é feita
+# contra o método de referência (WinRHIZO, régua ou método das interseções)
+# nas mesmas amostras.
 # Requer os pacotes png e ggplot2.
 # =============================================================================
 
 library(png)
 library(ggplot2)
+
+# Os caminhos são relativos à pasta exemplos/. Aberto pelo projeto, o script entra nela.
+if (!dir.exists("dados") && dir.exists("exemplos")) setwd("exemplos")
 
 ## ---- raiz-simular ----
 # Desenha um sistema radicular e devolve o comprimento total desenhado (px).
@@ -68,6 +73,18 @@ desloca <- function(m, di, dj) {
   lj <- max(1, 1 - dj):min(ncol(m), ncol(m) - dj)
   out[li, lj] <- m[li + di, lj + dj]
   out
+}
+
+# Dilatação e erosão com os 8 vizinhos. O fechamento (dilatar e depois erodir)
+# preenche pequenos buracos dentro da raiz, causados por sombra e reflexo
+vizinhos8 <- list(c(-1, 0), c(-1, 1), c(0, 1), c(1, 1),
+                  c(1, 0), c(1, -1), c(0, -1), c(-1, -1))
+dilatar <- function(m) Reduce(`|`, lapply(vizinhos8, function(d) desloca(m * 1L, d[1], d[2]) == 1), m)
+erodir  <- function(m) Reduce(`&`, lapply(vizinhos8, function(d) desloca(m * 1L, d[1], d[2]) == 1), m)
+fechar  <- function(m, k = 4) {
+  for (i in seq_len(k)) m <- dilatar(m)
+  for (i in seq_len(k)) m <- erodir(m)
+  m
 }
 
 # Afinamento de Zhang e Suen (1984): remove pixels da borda até sobrar uma
@@ -126,10 +143,12 @@ comprimento_px <- function(esqueleto) {
 }
 
 ## ---- raiz-imagem ----
-verdadeiro <- simular_raiz("raiz_01.png", semente = 1)
+img <- readPNG("dados/raiz_soja.png")
+R <- img[, , 1]; G <- img[, , 2]; B <- img[, , 3]
 
-img  <- readPNG("raiz_01.png")
-raiz <- apply(img[, , 1:3], c(1, 2), mean) < 0.5   # TRUE onde há raiz
+# raiz: clara e mais vermelha que azul; o caule verde fica de fora
+raiz <- R > B + 0.08 & pmax(R, G, B) > 0.45 & !(G > R)
+raiz <- fechar(raiz, k = 4)                        # tapa buracos de sombra
 dim(raiz)
 mean(raiz) * 100                                   # % da imagem com raiz
 
@@ -138,19 +157,51 @@ esqueleto <- afinar(raiz)
 c(raiz = sum(raiz), esqueleto = sum(esqueleto))    # pixels antes e depois
 
 ## ---- raiz-comprimento ----
-cm_por_px <- 2.54 / 200                            # imagem de 200 dpi
-estimado  <- comprimento_px(esqueleto) * cm_por_px
-round(c(estimado = estimado, verdadeiro = verdadeiro * cm_por_px), 1)
+comprimento <- comprimento_px(esqueleto)
+round(comprimento)                                 # em pixels
+
+# Para converter em cm é preciso uma escala na foto (régua ou dpi do scanner):
+# cm_por_px <- 10 / pixels_entre_0_e_10_cm_da_regua
 
 ## ---- raiz-mapa ----
-par(mfrow = c(1, 2), mar = c(0, 0, 2, 0))
-plot(as.raster(img)); title("Imagem")
-mapa <- matrix("#F4F1EA", nrow(raiz), ncol(raiz))
-mapa[raiz] <- "#D9CBB8"; mapa[esqueleto] <- "#10116F"
-plot(as.raster(mapa)); title("Esqueleto")
+colunas <- 330:830                                 # recorte em torno da raiz
+mapa <- matrix("#FFFFFF", nrow(raiz), ncol(raiz))
+mapa[raiz] <- "#E6D3B3"; mapa[esqueleto] <- "#10116F"
+layout(matrix(1:3, 1), widths = c(1, 1, 1.6))
+par(mar = c(0, 0, 2.2, 0.6))
+plot(as.raster(img[, colunas, ]));  title("Foto", cex.main = 1.6)
+plot(as.raster(mapa[, colunas]));   title("Raiz e esqueleto", cex.main = 1.6)
+plot(as.raster(mapa[250:550, 420:720])); title("Detalhe", cex.main = 1.6)
+
+## ---- concordancia ----
+# Correlação e concordância não são a mesma coisa (dados ilustrativos).
+# Correlação: os valores sobem juntos. Concordância: os valores são iguais,
+# ponto a ponto, e caem sobre a linha 1:1.
+set.seed(3)
+ref <- seq(20, 120, length.out = 12)
+ilustra <- rbind(
+  data.frame(caso = "Correlação alta,\nconcordância baixa", ref,
+             script = 0.65 * ref + 34 + rnorm(12, 0, 5)),
+  data.frame(caso = "Correlação e\nconcordância altas", ref,
+             script = ref + rnorm(12, 0, 5)))
+ccc_lin <- function(x, y) 2 * cov(x, y) / (var(x) + var(y) + (mean(x) - mean(y))^2)
+virg <- function(x) sub(".", ",", sprintf("%.2f", x), fixed = TRUE)
+rotulos <- do.call(rbind, lapply(split(ilustra, ilustra$caso), function(d)
+  data.frame(caso = d$caso[1],
+             lab = paste0("r = ", virg(cor(d$ref, d$script)),
+                          "\nCCC = ", virg(ccc_lin(d$ref, d$script))))))
+ggplot(ilustra, aes(ref, script)) +
+  geom_abline(slope = 1, intercept = 0, linetype = 2, colour = "grey50") +
+  geom_point(size = 3, colour = "#2F3BA6") +
+  geom_text(data = rotulos, aes(x = 18, y = 128, label = lab),
+            hjust = 0, vjust = 1, size = 5.5, lineheight = 0.9) +
+  facet_wrap(~ caso) +
+  coord_equal(xlim = c(15, 130), ylim = c(15, 130)) +
+  labs(x = "Método de referência", y = "Script")
 
 ## ---- raiz-validacao ----
-# 12 imagens com comprimento conhecido, do mais simples ao mais denso
+# 12 imagens simuladas com comprimento conhecido, do mais simples ao mais denso
+cm_por_px <- 2.54 / 200                            # imagens de 200 dpi
 validacao <- do.call(rbind, lapply(1:12, function(i) {
   arq <- sprintf("raiz_val_%02d.png", i)
   real <- simular_raiz(arq, n_laterais = 5 + 4 * i, semente = 100 + i)
